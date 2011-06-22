@@ -2,18 +2,6 @@ import urllib2
 import re
 import time
 
-#Known problems:
-#1) If a wikipedia page has a link to "Coordinates" at the top left, with the geographic coordinates of the location
-#the page is about, it thinks the "Coordinates" link is an appropriate choice and goes to the wikipedia page Geographic Coordinate System.
-#2) Sometimes when it does response.read() for certain pages, it ends up with something that isn't actually the HTML of the website.
-#I have no idea if this is a problem with the code or what. It's pretty rare and it accounts for almost all of the "no link" occasions.
-#What's especially weird is that for the same article, it will sometimes happen and sometimes not.
-#3) The very first time you run it for any given EdgeFile, don't run MakeList because it will get an error since the file doesn't exist.
-#So run it once without makeList and then after that if you choose that same EdgeFile, run it with makeList.
-#4) It doesn't convert URL encodings in the names of the articles, but this only matters if you care about making the labels on your graph look nice.
-#5) Gephi is somewhat picky about characters in EdgeFile. It will interpret commas and spaces as node separators, so some post-processing on the .csv file
-#is necessary but pretty easy.
-
 def getRandomPage():
     #time.sleep(1)
     #uncomment the above line if you want to wait 1 second every time you grab a random page
@@ -71,7 +59,6 @@ def matchParen(string,index): #give it a string and the index of an open parenth
         else:
             return len(string)-1
     return currentIndex-1
-            
 
 def findNextLink(response): #given a wikipedia page, it finds the first non-italic, non-parenthetical link in the article text
     wikipage = response.read()
@@ -96,7 +83,6 @@ def findNextLink(response): #given a wikipedia page, it finds the first non-ital
         enddivIndex = matchDiv(wikipage,divIndex)
         wikipage = wikipage[:divIndex]+wikipage[enddivIndex+6:]
         divIndex = wikipage.find('<div class="thumb tleft">',divIndex+1)
-
 
     pattern = re.compile('<a href=.*?><i>.*?</i></a>') #regex for italic links (in otherwise non-italic text)
     match = pattern.search(wikipage) 
@@ -131,7 +117,6 @@ def findNextLink(response): #given a wikipedia page, it finds the first non-ital
         return None
 
     urlend = match.group(1) 
-    print urlend 
     #time.sleep(1)
     #uncomment the above line if you want it to wait 1 second before going to any new link
     request = urllib2.Request('http://en.wikipedia.org'+urlend)
@@ -149,6 +134,7 @@ def getName(response): #pass in the wikipedia page, returns the name of the page
 def addEdge(currentPage,nextPage): #adds the edge between one page and the next to the .csv file
     f = open(EdgeFile,'a')
     f.write(getName(currentPage)+';'+getName(nextPage)+'\n')
+    print getName(currentPage)+';'+getName(nextPage)
     f.close()
 
 def alreadySeen(pageName): #detects if we've already been to the page, based on name
@@ -172,6 +158,8 @@ def makeGraphData(): #picks a random page to start and keeps finding the next li
             currentPage = nextPage
 
 def makeList(): #reads in all the pages it's been to when you've run this in the past and adds it to the list of already seen pages.
+    g = open(EdgeFile,'a')
+    g.close()
     f = open(EdgeFile,'r')
     wikilist = f.read()
     edgelist = wikilist.split('\n')
@@ -179,7 +167,7 @@ def makeList(): #reads in all the pages it's been to when you've run this in the
         index = edgelist[i].find(';')
         nodeList.append(edgelist[i][:index])
 
-EdgeFile = 'wikilist2.csv' #the file you want it to add the edges to
+EdgeFile = 'blahblah.csv' #the file you want it to add the edges to
 nodeList = []
 runLength = 10 #the number of chains you want to find
 makeList() #populate the already-seen list
