@@ -1,14 +1,15 @@
-import urllib2
+import urllib.request, urllib.error
 import re
 import time
+import concurrent.futures
 
 def getRandomPage():
     #time.sleep(1)
     #uncomment the above line if you want to wait 1 second every time you grab a random page
-    request = urllib2.Request('http://en.wikipedia.org/wiki/Special:Random') #if you want to start on a specific page just change "Special:Random" to the name of the page you want to start on
+    request = urllib.request.Request('http://en.wikipedia.org/wiki/Special:Random') #if you want to start on a specific page just change "Special:Random" to the name of the page you want to start on
     request.add_header('User-agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/534.30 (KHTML, like Gecko) Chrome/12.0.742.100 Safari/534.30')
-    response = urllib2.urlopen(request)
-    return response
+    response = urllib.request.urlopen(request)
+    return (response,None)
 
 def matchTable(string,index): #give it a string and the index where "<table" shows up in the string, and it will find the matching "</table>" in the HTML
     currentIndex = index+1
@@ -61,7 +62,13 @@ def matchParen(string,index): #give it a string and the index of an open parenth
     return currentIndex-1
 
 def findNextLink(response): #given a wikipedia page, it finds the first non-italic, non-parenthetical link in the article text
-    wikipage = response.read()
+    oldpage = response
+    try:
+        wikipage = response.read().decode("utf-8")
+    except UnicodeDecodeError:
+        # why do some wikipedia pages have utf8 decoding problems?
+        # i suspect it happens when there are special characters in the name...
+        return (response,response)
 
     tableIndex = wikipage.find('<table') #find the first table
 
@@ -113,16 +120,16 @@ def findNextLink(response): #given a wikipedia page, it finds the first non-ital
     pattern = re.compile('<a href="(/wiki/[^:]*?)"') #regex for a link that does not contain ":" as files uploaded to wikipedia would have
     match = pattern.search(body) #find the first such link
     if match == None: #detects if there is no such link
-        print 'no link'
+        print('no link')
         return None
 
     urlend = match.group(1) 
     #time.sleep(1)
     #uncomment the above line if you want it to wait 1 second before going to any new link
-    request = urllib2.Request('http://en.wikipedia.org'+urlend)
+    request = urllib.request.Request('http://en.wikipedia.org'+urlend)
     request.add_header('User-agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/534.30 (KHTML, like Gecko) Chrome/12.0.742.100 Safari/534.30')
-    response = urllib2.urlopen(request)
-    return response
+    response = urllib.request.urlopen(request)
+    return (response,oldpage)
 
 def getName(response): #pass in the wikipedia page, returns the name of the page (according to the URL)
     url = response.geturl()
@@ -134,28 +141,28 @@ def getName(response): #pass in the wikipedia page, returns the name of the page
 def addEdge(currentPage,nextPage): #adds the edge between one page and the next to the .csv file
     f = open(EdgeFile,'a')
     f.write(getName(currentPage)+';'+getName(nextPage)+'\n')
-    print getName(currentPage)+';'+getName(nextPage)
+    print(getName(currentPage)+';'+getName(nextPage))
     f.close()
 
 def alreadySeen(pageName): #detects if we've already been to the page, based on name
-    return pageName in nodeList
-    
-def makeGraphData(): #picks a random page to start and keeps finding the next link until it hits a page that has already been seen. runLength is the number of chains you want it to find.
-    currentPage = getRandomPage()
+    return pageName in nodeSet
 
+# callback called when we have finished downloading a page
+def handlePageResult(page):
+    newPage,oldPage = page.result()
+    if newPage != None:
+        if oldPage != None:
+            addEdge(oldPage,newPage)
+        # this should be replaced with a guaranteed-atomic operation, otherwise we may duplicate work
+        if not alreadySeen(getName(newPage)):
+            nodeSet.add(getName(newPage))
+            future = executor.submit(findNextLink,newPage)
+            future.add_done_callback(handlePageResult)
+
+def makeGraphData(): #picks a random page to start and keeps finding the next link until it hits a page that has already been seen. runLength is the number of chains you want it to find.
     for i in range(runLength):
-        print '\n'+'chain '+str(i)+'\n' #prints what chain it's on
-        while alreadySeen(getName(currentPage)): #if the first page it picked has already been seen it keeps picking random ones until it finds one it hasn't seen.
-            currentPage = getRandomPage()
-        
-        while not alreadySeen(getName(currentPage)): #keeps finding the next link until it's already seen the current page.
-            nodeList.append(getName(currentPage)) #keep track of what pages it's been to
-            nextPage = findNextLink(currentPage) #finding the next page
-            if nextPage != None: #if it found a page
-                addEdge(currentPage,nextPage) #add the edge
-            else:
-                nextPage = getRandomPage() #this is what happens if it couldn't find a link on a page -- it goes to another random page and doesn't add an edge
-            currentPage = nextPage
+        future = executor.submit(getRandomPage)
+        future.add_done_callback(handlePageResult)
 
 def makeList(): #reads in all the pages it's been to when you've run this in the past and adds it to the list of already seen pages.
     g = open(EdgeFile,'a')
@@ -165,11 +172,11 @@ def makeList(): #reads in all the pages it's been to when you've run this in the
     edgelist = wikilist.split('\n')
     for i in range(len(edgelist)):
         index = edgelist[i].find(';')
-        nodeList.append(edgelist[i][:index])
+        nodeSet.add(edgelist[i][:index])
 
 EdgeFile = 'blahblah.csv' #the file you want it to add the edges to
-nodeList = []
+nodeSet = set([])
 runLength = 10 #the number of chains you want to find
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=runLength)
 makeList() #populate the already-seen list
 makeGraphData() #find new graph data
-
