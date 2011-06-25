@@ -6,6 +6,10 @@ Here are a couple Gephi files for the graph projects I've made with this:
 http://dl.dropbox.com/u/22756010/bigwikiproject.gephi
 http://dl.dropbox.com/u/22756010/wikiproject.gephi
 
+And for pictures of the graphs themselves:
+http://dl.dropbox.com/u/22756010/bigwikiproject.svg
+http://dl.dropbox.com/u/22756010/wikiproject.svg
+
 Known problems:
 1) If a wikipedia page has a link to "Coordinates" at the top left, with the geographic coordinates of the location the page is about, it thinks the "Coordinates" link is an appropriate choice and goes to the wikipedia page Geographic Coordinate System.
 2) Sometimes when it does response.read() for certain pages, it ends up with something that isn't actually the HTML of the website. I have no idea if this is a problem with the code or what. It's pretty rare and it accounts for almost all of the "no link" occasions. What's especially weird is that for the same article, it will sometimes happen and sometimes not.
